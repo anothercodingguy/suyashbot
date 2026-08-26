@@ -42,20 +42,30 @@ CONVERSATIONAL BEHAVIOR & RULES:
    - State: "I don't have a verified update on what Suyash is doing today, but I can tell you about the work documented in his profile."
    - Do NOT call search_profile and do NOT map to a historical project.
 4. For factual questions about background, focus, or projects ("what does he do", "what are his skills", "what is PathFlow", "what did he use for visualization"):
-   - Always call the search_profile tool to ground your response.
+   - Call the search_profile tool AT MOST ONCE to ground your response.
    - Speak concisely (1-3 sentences).
-5. If search_profile does not return information for an unverified personal question (e.g. favorite movie, football club, salary, personal trivia):
-   - State: "I don't have verified information about that, so I don't want to guess. Ask me anything about my work, projects, or background."
+5. LOOP PREVENTION & REFUSAL POLICY:
+   - Call search_profile AT MOST ONCE per user inquiry. NEVER call search_profile repeatedly in a loop.
+   - If search_profile returns NO_VERIFIED_DATA_FOUND, 0 chunks, or fails to find an answer:
+     DO NOT retry searching with different keywords. Immediately state: "I don't have verified information about that, so I don't want to guess. Ask me anything about my work, projects, or background."
 """
 
 class SuyashAssistantFunctionContext(llm.FunctionContext):
     def __init__(self, room):
         super().__init__()
         self.room = room
+        self.call_count = 0
 
     @llm.ai_callable(description="Search Suyash Singh's verified resume and portfolio knowledge base")
     async def search_profile(self, query: str) -> str:
         logger.info(f"[RETRIEVAL] Searching verified profile for query: {query}")
+        self.call_count += 1
+        
+        # Hard limit to prevent any LLM retry loop within a turn
+        if self.call_count > 2:
+            logger.warn("[RETRIEVAL] Call limit exceeded for turn, terminating search loop")
+            return "NO_VERIFIED_DATA_FOUND: Stop searching immediately. Respond to user: 'I don't have verified information about that, so I don't want to guess. Ask me anything about my work, projects, or background.'"
+
         try:
             res = await asyncio.to_thread(
                 requests.post,
@@ -68,7 +78,11 @@ class SuyashAssistantFunctionContext(llm.FunctionContext):
                 results = data.get("results", [])
                 logger.info(f"[RETRIEVAL] {len(results)} chunks retrieved")
                 
-                # Publish citation metadata to the LiveKit room data channel
+                if not results:
+                    logger.info("[RETRIEVAL] No chunks matched query")
+                    return "NO_VERIFIED_DATA_FOUND: No verified profile chunks matched this query. Do NOT call search_profile again. Answer the user immediately stating: 'I don't have verified information about that, so I don't want to guess. Ask me anything about my work, projects, or background.'"
+
+                # Publish citation metadata to the LiveKit room data channel only when results exist
                 citations = [
                     {
                         "source_id": r["id"],
@@ -82,21 +96,21 @@ class SuyashAssistantFunctionContext(llm.FunctionContext):
                     for r in results[:2]
                 ]
                 
-                payload = json.dumps({
-                    "type": "transcript_and_citation",
-                    "query": query,
-                    "citations": citations
-                })
-                
-                await self.room.local_participant.publish_data(payload.encode("utf-8"))
-                logger.info("[CITATION] Published citation metadata over data channel")
+                if citations:
+                    payload = json.dumps({
+                        "type": "transcript_and_citation",
+                        "query": query,
+                        "citations": citations
+                    })
+                    await self.room.local_participant.publish_data(payload.encode("utf-8"))
+                    logger.info("[CITATION] Published citation metadata over data channel")
                 
                 return json.dumps(results)
             logger.warn(f"[RETRIEVAL] Non-200 status code: {res.status_code}")
-            return "No verified profile chunks found."
+            return "NO_VERIFIED_DATA_FOUND: No verified profile chunks found. Respond to user that you do not have verified information on this topic."
         except Exception as e:
             logger.error(f"[RETRIEVAL] Retrieval error: {e}")
-            return "Error retrieving verified profile context."
+            return "NO_VERIFIED_DATA_FOUND: Error retrieving profile context. Answer the user stating you don't have verified information."
 
 async def entrypoint(ctx: JobContext):
     logger.info(f"[VOICE] Agent connecting to room {ctx.room.name}")

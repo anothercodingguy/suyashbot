@@ -23,9 +23,9 @@ export const KNOWLEDGE_BASE: KnowledgeChunk[] = [
     content:
       'Suyash Singh is a Computer Science Engineering (Data Science) undergraduate at Manipal Institute of Technology (graduating 2027) with a strong foundation in full-stack engineering, distributed systems, AI agent observability, and machine learning pipelines. Public profile links: Portfolio Website (https://suyash.website), LinkedIn (linkedin.com/in/suyashin), GitHub (github.com/anothercodingguy), Email (suyashs787@gmail.com), Phone (+91 8604960115).',
     keywords: [
-      'suyash',
-      'suyash singh',
       'who is suyash',
+      'about suyash',
+      'suyash bio',
       'profile',
       'bio',
       'portfolio',

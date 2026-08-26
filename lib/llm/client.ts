@@ -534,19 +534,7 @@ function generateDeterministicGroundedResponse(
     };
   }
 
-  // 13. General Grounded Fallback with Highest-Scored Chunk
-  if (retrievedChunks.length > 0) {
-    const primary = retrievedChunks[0];
-    const citations = validateCitations([primary.id], retrievedChunks);
-    return {
-      answer:
-        "Suyash is a systems engineer and Computer Science student at Manipal focused on software engineering and AI infrastructure, including projects like PathFlow and published research in machine unlearning at ICDDS 2025.",
-      citations,
-      grounded: true,
-      retrieved_chunk_ids: [primary.id],
-    };
-  }
-
+  // 13. Terminal ungrounded refusal when query does not match verified knowledge base
   return {
     answer:
       "I don't have verified information about that, so I don't want to guess. Ask me anything about my work, projects, or background.",

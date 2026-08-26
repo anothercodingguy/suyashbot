@@ -79,9 +79,44 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<WebSpeechRecognition | null>(null);
   const isCallActiveRef = useRef<boolean>(false);
+  const isSpeakingRef = useRef<boolean>(false);
+  const lastSpokenTextRef = useRef<string>('');
+  const lastQueryRef = useRef<{ text: string; time: number }>({ text: '', time: 0 });
   const animFrameRef = useRef<number | null>(null);
   const audioElementsRef = useRef<HTMLMediaElement[]>([]);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Helper to detect acoustic feedback echoes of assistant's words or refusal phrases
+  const isAcousticEcho = (input: string, lastSpoken: string): boolean => {
+    const cleanInput = input
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleanInput) return true;
+
+    // Check standard assistant refusal phrases
+    if (
+      cleanInput.startsWith('i don t have verified information') ||
+      cleanInput.startsWith('i dont have verified information') ||
+      cleanInput.startsWith('i do not have verified information') ||
+      cleanInput.includes('so i don t want to guess') ||
+      cleanInput.includes('so i dont want to guess') ||
+      cleanInput.includes('ask me anything about my work')
+    ) {
+      return true;
+    }
+
+    if (!lastSpoken) return false;
+
+    // If cleanInput is a significant substring of what the assistant just spoke
+    if (cleanInput.length > 8 && lastSpoken.includes(cleanInput)) {
+      return true;
+    }
+
+    return false;
+  };
 
   // Initialize or resume the Web Audio Context for audio analysis & playback
   const getAudioContext = useCallback(async (): Promise<AudioContext> => {
@@ -162,6 +197,7 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
 
   // Stops currently playing TTS audio (for interruption handling)
   const interruptPlayback = useCallback(() => {
+    isSpeakingRef.current = false;
     if (currentAudioSourceRef.current) {
       try {
         currentAudioSourceRef.current.stop();
@@ -175,6 +211,11 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   const playServerTTS = useCallback(
     async (text: string): Promise<void> => {
       interruptPlayback();
+      lastSpokenTextRef.current = text
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
       try {
         console.log('[TTS] Requesting server-side TTS audio for answer...');
@@ -200,11 +241,13 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
           remoteAnalyserRef.current = analyser;
 
           currentAudioSourceRef.current = source;
+          isSpeakingRef.current = true;
           setState('speaking');
 
           return new Promise<void>((resolve) => {
             source.onended = () => {
               console.log('[AUDIO] TTS playback completed');
+              isSpeakingRef.current = false;
               remoteAnalyserRef.current = null;
               currentAudioSourceRef.current = null;
               if (isCallActiveRef.current) {
@@ -218,12 +261,14 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
           });
         } else {
           console.log('[TTS] Server TTS unavailable, answer displayed in transcript.');
+          isSpeakingRef.current = false;
           if (isCallActiveRef.current) {
             setState('listening');
           }
         }
       } catch (err) {
         console.warn('[TTS] Server TTS notice:', err);
+        isSpeakingRef.current = false;
         if (isCallActiveRef.current) {
           setState('listening');
         }
@@ -235,14 +280,33 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   // Core RAG & LLM Message Handler
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!text.trim()) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      // Prevent acoustic feedback echo of assistant's words or refusal phrases
+      if (isAcousticEcho(trimmed, lastSpokenTextRef.current)) {
+        console.log('[AUDIO] Ignored acoustic feedback echo from speaker:', trimmed);
+        return;
+      }
+
+      // Debounce identical rapid queries within 2.5 seconds to prevent retry loops
+      const now = Date.now();
+      const normalizedQuery = trimmed.toLowerCase();
+      if (
+        lastQueryRef.current.text === normalizedQuery &&
+        now - lastQueryRef.current.time < 2500
+      ) {
+        console.log('[QUERY] Debounced rapid duplicate query:', trimmed);
+        return;
+      }
+      lastQueryRef.current = { text: normalizedQuery, time: now };
 
       interruptPlayback();
 
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         sender: 'user',
-        text: text.trim(),
+        text: trimmed,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -257,12 +321,12 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
           citedChunkIds: m.citations?.map((c) => c.source_id),
         }));
 
-        console.log(`[QUERY] Sending inquiry to grounded RAG pipeline: "${text.trim()}"`);
+        console.log(`[QUERY] Sending inquiry to grounded RAG pipeline: "${trimmed}"`);
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: text.trim(),
+            message: trimmed,
             history: historyPayload,
           }),
         });
@@ -326,12 +390,17 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
 
       recognition.onstart = () => {
         console.log('[STT] Speech recognition actively listening to microphone...');
-        if (isCallActiveRef.current) {
+        if (isCallActiveRef.current && !isSpeakingRef.current) {
           setState('listening');
         }
       };
 
       recognition.onresult = (event) => {
+        // If assistant is currently speaking via TTS audio, ignore mic pickup to prevent loop
+        if (isSpeakingRef.current) {
+          return;
+        }
+
         let currentInterim = '';
         let finalUtterance = '';
 
@@ -346,8 +415,9 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
 
         const displayTranscript = (currentInterim || finalUtterance).trim();
         if (displayTranscript) {
-          // Interrupt any currently playing AI voice audio immediately
-          interruptPlayback();
+          if (isAcousticEcho(displayTranscript, lastSpokenTextRef.current)) {
+            return;
+          }
           if (isCallActiveRef.current && state === 'speaking') {
             setState('listening');
           }
@@ -356,6 +426,12 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
 
         if (finalUtterance && finalUtterance.trim().length > 0) {
           const cleanedText = finalUtterance.trim();
+          if (isAcousticEcho(cleanedText, lastSpokenTextRef.current)) {
+            console.log('[STT] Filtered out speaker echo utterance:', cleanedText);
+            setInterimTranscript('');
+            return;
+          }
+
           console.log(`[STT] Speech finalized: "${cleanedText}"`);
           setInterimTranscript('');
           interruptPlayback();
@@ -486,8 +562,10 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
           room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
             const isAgentSpeaking = speakers.some((p) => p !== room.localParticipant);
             if (isAgentSpeaking) {
+              isSpeakingRef.current = true;
               setState('speaking');
             } else if (state === 'speaking') {
+              isSpeakingRef.current = false;
               setState('listening');
             }
           });

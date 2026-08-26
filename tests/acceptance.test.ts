@@ -162,4 +162,20 @@ describe('Voicebot Natural Conversational & Grounded Acceptance Tests', () => {
     expect(res.answer).toMatch(/Could you clarify/i);
     expect(res.citations.length).toBe(0);
   });
+
+  // Test 18: Unanswerable / Unknown query -> Clean refusal without loop
+  it('Test 18: Unknown query -> Terminal refusal without loop or hallucination', async () => {
+    const res = await generateGroundedAnswer('What kind of car does Suyash drive?');
+    expect(res.grounded).toBe(false);
+    expect(res.citations.length).toBe(0);
+    expect(res.answer).toMatch(/don't have verified information/i);
+  });
+
+  // Test 19: Acoustic echo of refusal phrase -> Handled gracefully as conversational confirmation
+  it('Test 19: Echo of refusal phrase -> Handled as confirmation to break feedback loop', async () => {
+    const res = await generateGroundedAnswer("I don't have verified information about that, so I don't want to guess.");
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/Glad that helped|What else would you like to know/i);
+    expect(res.citations.length).toBe(0);
+  });
 });

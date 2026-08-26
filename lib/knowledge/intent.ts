@@ -167,6 +167,27 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     .replace(/\s+/g, ' ')
     .trim();
 
+  // 0. Guard against acoustic echo of the assistant's own standard refusal phrases
+  if (
+    normalized.startsWith("i don't have verified information") ||
+    normalized.startsWith("i dont have verified information") ||
+    normalized.startsWith("i do not have verified information") ||
+    normalized.includes("so i don't want to guess") ||
+    normalized.includes("so i dont want to guess") ||
+    normalized.includes("ask me anything about my work")
+  ) {
+    return {
+      rawQuery,
+      normalizedQuery: normalized,
+      intent: 'confirmation',
+      isConversational: true,
+      detectedEntity: null,
+      subtopic: null,
+      expandedKeywords: [],
+      resolvedContextQuery: rawQuery,
+    };
+  }
+
   // 1. Check prompt injection
   if (INJECTION_PATTERNS.some((p) => normalized.includes(p))) {
     return {
