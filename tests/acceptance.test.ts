@@ -105,6 +105,26 @@ describe('Voicebot Natural Conversational & Grounded Acceptance Tests', () => {
     expect(res.citations.some((c) => c.source_id === 'resume-project-pathflow')).toBe(true);
   });
 
+  // Test 8b: Contextual Follow-up — "what other projects has he done"
+  it('Test 8b: "what other projects has he done" -> Resolves other projects (Semantic Gateway, ReachInbox, SENNs)', async () => {
+    const history = [
+      {
+        role: 'user' as const,
+        content: 'what is PathFlow?',
+        citedChunkIds: ['resume-project-pathflow'],
+      },
+      {
+        role: 'assistant' as const,
+        content: 'PathFlow is an observability platform for AI agents.',
+        citedChunkIds: ['resume-project-pathflow'],
+      },
+    ];
+    const res = await generateGroundedAnswer('okay what other projects he has done', history);
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/Semantic LLM Gateway|ReachInbox|SENNs/i);
+    expect(res.citations.some((c) => c.source_id === 'resume-project-semantic-llm')).toBe(true);
+  });
+
   // Test 9: Education — "what does he study?"
   it('Test 9: "what does he study?" -> Cites Education chunk', async () => {
     const res = await generateGroundedAnswer('what does he study?');

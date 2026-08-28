@@ -404,7 +404,7 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
         let currentInterim = '';
         let finalUtterance = '';
 
-        for (let i = 0; i < event.results.length; ++i) {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
           if (res.isFinal) {
             finalUtterance += res[0].transcript + ' ';
@@ -436,9 +436,9 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
           setInterimTranscript('');
           interruptPlayback();
 
-          // Restart recognition cleanly for next turn
+          // Reset recognition cleanly for next turn to prevent buffer accumulation
           try {
-            recognition.stop();
+            recognition.abort();
           } catch { /* expected */ }
 
           sendMessage(cleanedText);

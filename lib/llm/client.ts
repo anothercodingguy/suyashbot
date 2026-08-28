@@ -380,12 +380,12 @@ function generateDeterministicGroundedResponse(
 
   // 4. PathFlow Intent (including subtopics like visualization, stack)
   if (
-    intent === 'pathflow' ||
-    classification.detectedEntity === 'PathFlow' ||
-    qLower.includes('pathflow') ||
-    qLower.includes('path flow') ||
-    qLower.includes('path-flow') ||
-    retrievedChunks.some((c) => c.id === 'resume-project-pathflow')
+    (intent === 'pathflow' ||
+      classification.detectedEntity === 'PathFlow' ||
+      qLower.includes('pathflow') ||
+      qLower.includes('path flow') ||
+      qLower.includes('path-flow')) &&
+    intent !== 'projects'
   ) {
     const pathChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-pathflow') ||
@@ -421,12 +421,12 @@ function generateDeterministicGroundedResponse(
 
   // 5. Semantic LLM Gateway Intent ("What is the Semantic LLM Gateway?")
   if (
-    intent === 'semantic_gateway' ||
-    classification.detectedEntity === 'Semantic LLM Gateway' ||
-    qLower.includes('semantic gateway') ||
-    qLower.includes('semantic llm') ||
-    (qLower.includes('gateway') && !qLower.includes('pathflow')) ||
-    retrievedChunks.some((c) => c.id === 'resume-project-semantic-llm')
+    (intent === 'semantic_gateway' ||
+      classification.detectedEntity === 'Semantic LLM Gateway' ||
+      qLower.includes('semantic gateway') ||
+      qLower.includes('semantic llm') ||
+      (qLower.includes('gateway') && !qLower.includes('pathflow'))) &&
+    intent !== 'projects'
   ) {
     const semChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-semantic-llm') ||
@@ -443,11 +443,11 @@ function generateDeterministicGroundedResponse(
 
   // 6. Research / SENNs Intent ("What is SENNs?", "Tell me about your research")
   if (
-    intent === 'research' ||
-    classification.detectedEntity === 'SENNs' ||
-    qLower.includes('senns') ||
-    qLower.includes('unlearning') ||
-    retrievedChunks.some((c) => c.id === 'resume-project-senns')
+    (intent === 'research' ||
+      classification.detectedEntity === 'SENNs' ||
+      qLower.includes('senns') ||
+      qLower.includes('unlearning')) &&
+    intent !== 'projects'
   ) {
     const sennChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-senns') ||
@@ -464,11 +464,11 @@ function generateDeterministicGroundedResponse(
 
   // 7. ReachInbox Intent
   if (
-    intent === 'reachinbox' ||
-    classification.detectedEntity === 'ReachInbox' ||
-    qLower.includes('reachinbox') ||
-    qLower.includes('reach inbox') ||
-    retrievedChunks.some((c) => c.id === 'resume-project-reachinbox')
+    (intent === 'reachinbox' ||
+      classification.detectedEntity === 'ReachInbox' ||
+      qLower.includes('reachinbox') ||
+      qLower.includes('reach inbox')) &&
+    intent !== 'projects'
   ) {
     const reachChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-reachinbox') ||
@@ -483,13 +483,28 @@ function generateDeterministicGroundedResponse(
     };
   }
 
-  // 8. Projects General Intent ("What have you built?", "What projects have you worked on?")
+  // 8. Projects General Intent ("What have you built?", "What projects have you worked on?", "What other projects?")
   if (intent === 'projects') {
     const projectChunks = KNOWLEDGE_BASE.filter((c) => c.category === 'project');
     const projectCitations = validateCitations(
       projectChunks.map((c) => c.id),
       [...projectChunks, ...retrievedChunks]
     );
+
+    const hasPathflowContext = history.some(
+      (h) => h.content.toLowerCase().includes('pathflow') || h.citedChunkIds?.includes('resume-project-pathflow')
+    );
+
+    if (hasPathflowContext && (qLower.includes('other') || qLower.includes('else') || qLower.includes('besides'))) {
+      return {
+        answer:
+          "Besides PathFlow, I've built several key systems: the Semantic LLM Gateway (a low-latency FastAPI proxy with sub-50ms Qdrant caching), ReachInbox (a concurrent distributed email scheduler), and SENNs (peer-reviewed research in machine unlearning accepted at ICDDS 2025).",
+        citations: projectCitations,
+        grounded: true,
+        retrieved_chunk_ids: projectChunks.map((c) => c.id),
+      };
+    }
+
     return {
       answer:
         "I've built several key systems: PathFlow (an OpenTelemetry observability platform for AI agent fleets), the Semantic LLM Gateway (a low-latency FastAPI proxy with sub-50ms Qdrant caching), ReachInbox (a concurrent distributed email scheduler), and SENNs (peer-reviewed research in machine unlearning at ICDDS 2025).",

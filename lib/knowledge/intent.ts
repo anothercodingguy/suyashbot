@@ -450,8 +450,21 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     detectedEntity = 'Codex';
   }
 
-  // Contextual Follow-up Entity & Pronoun Resolution
-  if (!detectedEntity && history.length > 0) {
+  const isAskingOtherProjects =
+    normalized.includes('other project') ||
+    normalized.includes('other projects') ||
+    normalized.includes('what other') ||
+    normalized.includes('what else') ||
+    normalized.includes('besides') ||
+    normalized.includes('apart from') ||
+    normalized.includes('another project') ||
+    normalized.includes('more projects') ||
+    normalized.includes('any other') ||
+    normalized.includes('all projects') ||
+    normalized.includes('different project');
+
+  // Contextual Follow-up Entity & Pronoun Resolution (skip if explicitly asking for "other" projects)
+  if (!detectedEntity && history.length > 0 && !isAskingOtherProjects) {
     for (let i = history.length - 1; i >= 0; i--) {
       const turn = history[i];
       const prevText = turn.content.toLowerCase();
@@ -622,11 +635,16 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     intent = 'work_experience';
     expandedKeywords = ['Stealth Startup', 'AI Intern', 'AWS distributed inference', 'IEEE Computer Society', 'R&D Intern', 'work experience'];
   }
-  // Projects General
+  // Projects General & Other Projects
   else if (
+    isAskingOtherProjects ||
     normalized.includes('what has he built') ||
     normalized.includes('what projects has he worked on') ||
     normalized.includes('what projects') ||
+    normalized.includes('what other projects') ||
+    normalized.includes('other projects') ||
+    normalized.includes('what other') ||
+    normalized.includes('what else') ||
     normalized.includes('tell me about his projects') ||
     normalized.includes('built') ||
     normalized.includes('projects')
