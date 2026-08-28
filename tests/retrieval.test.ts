@@ -130,4 +130,27 @@ describe('Retriever Engine Accuracy & Multi-Chunk Retrieval', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].id).toBe('resume-project-pathflow');
   });
+
+  it('retrieves other projects when user asks what other projects', () => {
+    const history = [
+      {
+        role: 'user' as const,
+        content: 'what is PathFlow?',
+        citedChunkIds: ['resume-project-pathflow'],
+      },
+      {
+        role: 'assistant' as const,
+        content: 'PathFlow is an observability platform for AI agents.',
+        citedChunkIds: ['resume-project-pathflow'],
+      },
+    ];
+
+    const { results, classification } = searchProfile('okay what other projects he has done', history);
+    expect(classification.intent).toBe('projects');
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain('resume-project-semantic-llm');
+    expect(ids).toContain('resume-project-senns');
+    expect(ids).toContain('resume-project-reachinbox');
+    expect(results[0].id).not.toBe('resume-project-pathflow');
+  });
 });
