@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Room,
   RoomEvent,
@@ -51,6 +51,10 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   const isCallActiveRef = useRef<boolean>(false);
   const animFrameRef = useRef<number | null>(null);
   const audioElementsRef = useRef<HTMLMediaElement[]>([]);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const isAgentInRoomRef = useRef<boolean>(false);
+  const speakingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize or resume the Web Audio Context for audio analysis
   const getAudioContext = useCallback(async (): Promise<AudioContext> => {
@@ -118,6 +122,10 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
 
   const stopAudioAnalysis = () => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (speakingIntervalRef.current) {
+      clearInterval(speakingIntervalRef.current);
+      speakingIntervalRef.current = null;
+    }
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
@@ -131,19 +139,145 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
     setAudioLevel(0);
   };
 
+  // Simulates organic speech orb pulse when using browser SpeechSynthesis
+  const startSpeakingVisualizer = () => {
+    if (speakingIntervalRef.current) clearInterval(speakingIntervalRef.current);
+    let step = 0;
+    speakingIntervalRef.current = setInterval(() => {
+      step += 0.2;
+      const base = 0.4 + Math.sin(step) * 0.25 + Math.random() * 0.2;
+      setAudioLevel(Math.min(1, Math.max(0.1, base)));
+    }, 50);
+  };
+
+  const stopSpeakingVisualizer = () => {
+    if (speakingIntervalRef.current) {
+      clearInterval(speakingIntervalRef.current);
+      speakingIntervalRef.current = null;
+    }
+    setAudioLevel(0);
+  };
+
   // Interruption handling
   const interruptPlayback = useCallback(() => {
-    if (roomRef.current?.localParticipant) {
-      // LiveKit VoiceAssistant automatically handles interruption via WebRTC audio stream and Silero VAD
-      console.log('[AUDIO] Interruption triggered');
+    console.log('[AUDIO] Interruption triggered');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
+    stopSpeakingVisualizer();
+    if (isCallActiveRef.current) {
+      setState('listening');
     }
   }, []);
 
-  // Text message handler (for typed queries in transcript drawer)
+  // Text-to-Speech Output Handler: Prefers server /api/tts (ElevenLabs/OpenAI), falls back to native Web Speech
+  const speakAnswer = useCallback(async (textToSpeak: string) => {
+    // If LiveKit agent is in the room and already streaming audio, let agent handle voice
+    if (isAgentInRoomRef.current) {
+      return;
+    }
+
+    // Strip bracketed citations e.g. [resume-project-senns] before speaking
+    const cleanText = textToSpeak.replace(/\[(?:resume-[a-zA-Z0-9_-]+|[a-zA-Z0-9_-]+)\]/g, '').trim();
+    if (!cleanText) return;
+
+    interruptPlayback();
+    setState('speaking');
+
+    // 1. Try server-side TTS (/api/tts -> ElevenLabs Chris or OpenAI)
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: cleanText }),
+      });
+
+      if (res.ok && res.headers.get('content-type')?.includes('audio')) {
+        const audioBlob = await res.blob();
+        if (audioBlob.size > 200) {
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          activeAudioRef.current = audio;
+
+          startSpeakingVisualizer();
+
+          audio.onended = () => {
+            stopSpeakingVisualizer();
+            activeAudioRef.current = null;
+            URL.revokeObjectURL(audioUrl);
+            if (isCallActiveRef.current) setState('listening');
+          };
+
+          audio.onerror = () => {
+            stopSpeakingVisualizer();
+            activeAudioRef.current = null;
+            URL.revokeObjectURL(audioUrl);
+            fallbackBrowserSpeech(cleanText);
+          };
+
+          await audio.play();
+          return;
+        }
+      }
+    } catch (_err) {
+      console.warn('[TTS API Notice] Falling back to browser speech synthesis:', _err);
+    }
+
+    // 2. Browser Speech Synthesis Fallback (Zero configuration, natural local voice)
+    fallbackBrowserSpeech(cleanText);
+  }, [interruptPlayback]);
+
+  const fallbackBrowserSpeech = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      if (isCallActiveRef.current) setState('listening');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(
+      (v) =>
+        v.name.includes('Daniel') ||
+        v.name.includes('Google US English') ||
+        v.name.includes('Samantha') ||
+        v.name.includes('Alex') ||
+        (v.lang && v.lang.startsWith('en'))
+    );
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    utterance.onstart = () => {
+      setState('speaking');
+      startSpeakingVisualizer();
+    };
+
+    utterance.onend = () => {
+      stopSpeakingVisualizer();
+      if (isCallActiveRef.current) setState('listening');
+    };
+
+    utterance.onerror = () => {
+      stopSpeakingVisualizer();
+      if (isCallActiveRef.current) setState('listening');
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Text message handler (for typed or transcribed queries)
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+
+      interruptPlayback();
 
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -171,25 +305,97 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
         });
 
         const data = await res.json();
+        const answerText = data.answer || "I'm having trouble retrieving verified profile data.";
 
         const assistantMsg: ChatMessage = {
           id: `ai-${Date.now()}`,
           sender: 'assistant',
-          text: data.answer || "I'm having trouble retrieving verified profile data.",
+          text: answerText,
           citations: data.citations || [],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+
+        // Speak the answer aloud
+        speakAnswer(answerText);
       } catch (err: unknown) {
         console.error('[Chat Error]', err);
         setErrorMessage('Failed to receive answer.');
+        if (isCallActiveRef.current) setState('listening');
       }
     },
-    [messages]
+    [messages, interruptPlayback, speakAnswer]
   );
 
-  // Connects Call: Connects LiveKit Room exclusively via WebRTC audio
+  // Starts Browser Speech-to-Text Recognition for instant client voice capture
+  const startBrowserSTT = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('[STT] Browser SpeechRecognition not supported on this browser.');
+      return;
+    }
+
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        // If agent is active over WebRTC, let WebRTC handle
+        if (isAgentInRoomRef.current) return;
+
+        let interim = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (interim) {
+          setInterimTranscript(interim);
+        }
+
+        if (finalTranscript.trim()) {
+          setInterimTranscript('');
+          sendMessage(finalTranscript.trim());
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          console.warn('[SpeechRecognition Notice]', event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        if (isCallActiveRef.current && !isMuted) {
+          try {
+            recognition.start();
+          } catch (_e) {}
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (e) {
+      console.warn('[Speech Recognition Init Warning]', e);
+    }
+  }, [isMuted, sendMessage]);
+
+  // Connects Call: Connects LiveKit Room and activates browser audio listeners
   const startCall = async () => {
     try {
       isCallActiveRef.current = true;
@@ -200,10 +406,9 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
       await getAudioContext();
 
       // 1. Request microphone permission for local audio analysis and WebRTC transmission
-      let stream: MediaStream | null = null;
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          stream = await navigator.mediaDevices.getUserMedia({
+          const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
@@ -217,7 +422,10 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
         console.warn('[Microphone Permission Notice]', micErr);
       }
 
-      // 2. Request LiveKit token from backend
+      // 2. Start browser Speech-to-Text listener
+      startBrowserSTT();
+
+      // 3. Request LiveKit token from backend
       let tokenData: { token?: string; url?: string; roomName?: string; participantName?: string; mode?: string } = {};
       try {
         const res = await fetch('/api/livekit/token', {
@@ -232,7 +440,7 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
         console.warn('[LiveKit Token Fetch Error]', tokenErr);
       }
 
-      // 3. Connect to LiveKit WebRTC room
+      // 4. Connect to LiveKit WebRTC room
       if (tokenData.token && tokenData.url) {
         try {
           const room = new Room({
@@ -245,8 +453,18 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
             setState('listening');
           });
 
-          room.on(RoomEvent.Disconnected, () => {
-            console.log('[LIVEKIT] Disconnected from LiveKit Room');
+          room.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
+            console.log('[LIVEKIT] Participant connected:', p.identity);
+            if (p.identity.includes('agent') || p.identity.includes('suyash')) {
+              isAgentInRoomRef.current = true;
+            }
+          });
+
+          room.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
+            console.log('[LIVEKIT] Participant disconnected:', p.identity);
+            if (p.identity.includes('agent') || p.identity.includes('suyash')) {
+              isAgentInRoomRef.current = false;
+            }
           });
 
           // Remote Track Subscription: LiveKit Agent TTS Audio is streamed directly over WebRTC
@@ -254,6 +472,7 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
             RoomEvent.TrackSubscribed,
             (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
               console.log(`[AUDIO] Remote track subscribed from participant ${participant.identity} (kind: ${track.kind})`);
+              isAgentInRoomRef.current = true;
               if (track.kind === Track.Kind.Audio) {
                 const audioElement = track.attach();
                 audioElement.id = `remote-audio-${participant.identity}`;
@@ -327,7 +546,16 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
 
   const endCall = () => {
     isCallActiveRef.current = false;
+    isAgentInRoomRef.current = false;
     interruptPlayback();
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (_e) {}
+      recognitionRef.current = null;
+    }
+
     if (roomRef.current) {
       roomRef.current.disconnect();
       roomRef.current = null;
@@ -359,6 +587,17 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
         track.enabled = !nextMuted;
       });
     }
+    if (recognitionRef.current) {
+      if (nextMuted) {
+        try {
+          recognitionRef.current.stop();
+        } catch (_e) {}
+      } else {
+        try {
+          recognitionRef.current.start();
+        } catch (_e) {}
+      }
+    }
   };
 
   const openCitation = (c: CitationItem) => {
@@ -369,6 +608,20 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   const closeCitation = () => {
     setIsDrawerOpen(false);
   };
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (_e) {}
+      }
+    };
+  }, []);
 
   return {
     state,
