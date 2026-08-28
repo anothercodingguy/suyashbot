@@ -14,17 +14,42 @@ export async function generateGroundedAnswer(
   query: string,
   history: ConversationTurn[] = []
 ): Promise<GroundedResponse> {
-  // Retrieve relevant verified profile chunks and classify intent
+  const groqKey = process.env.GROQ_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  // 1. Direct Zero-Hardcoding LLM Invocation (Transformer attention handles all synonyms, slang, & acronyms)
+  if (groqKey) {
+    try {
+      const response = await callGroq(query, ALL_CHUNKS, history, groqKey);
+      if (response && response.answer) return response;
+    } catch (e) {
+      console.warn('[LLM] Groq direct invocation notice:', e);
+    }
+  }
+
+  if (openaiKey) {
+    try {
+      const response = await callOpenAI(query, ALL_CHUNKS, history, openaiKey);
+      if (response && response.answer) return response;
+    } catch (e) {
+      console.warn('[LLM] OpenAI direct invocation notice:', e);
+    }
+  }
+
+  if (geminiKey) {
+    try {
+      const response = await callGemini(query, ALL_CHUNKS, history, geminiKey);
+      if (response && response.answer) return response;
+    } catch (e) {
+      console.warn('[LLM] Gemini direct invocation notice:', e);
+    }
+  }
+
+  // 2. Offline / Deterministic Grounding Fallback (for CI/CD test runners & local execution without API keys)
   const { results: retrievedChunks, classification } = searchProfile(query, history, 6);
-  const { intent, isConversational, detectedEntity } = classification;
+  const { intent } = classification;
 
-  // 2. Internal Diagnostic Decision Logging
-  console.log(`[CONVERSATION-ROUTER] ──────────────────────────────────────────`);
-  console.log(`[CONVERSATION-ROUTER] Query: "${query}"`);
-  console.log(`[CONVERSATION-ROUTER] Intent: ${intent} | Conversational: ${isConversational} | Entity: ${detectedEntity || 'none'}`);
-  console.log(`[CONVERSATION-ROUTER] Retrieved ${retrievedChunks.length} chunks: [${retrievedChunks.map((c) => c.id).join(', ')}]`);
-
-  // 3. Conversational Router: Greetings (e.g. "hello", "hello hello", "hey there")
   if (intent === 'greeting') {
     return {
       answer: "Hey! What would you like to know about Suyash?",
@@ -34,7 +59,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 4. Conversational Router: Acknowledgements (e.g. "thanks", "cool thanks", "thank you")
   if (intent === 'acknowledgement') {
     return {
       answer: "Of course!",
@@ -44,7 +68,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 5. Conversational Router: Confirmations (e.g. "okay", "cool", "got it", "nice")
   if (intent === 'confirmation') {
     return {
       answer: "Glad that helped. What else would you like to know?",
@@ -54,7 +77,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 6. Conversational Router: Farewells (e.g. "bye", "see you", "goodbye")
   if (intent === 'farewell') {
     return {
       answer: "See you! Have a great day.",
@@ -64,7 +86,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 7. Conversational Router: Smalltalk (e.g. "how are you", "how's it going")
   if (intent === 'smalltalk') {
     return {
       answer: "Doing great, thanks for asking! How are you doing?",
@@ -74,7 +95,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 8. Conversational Router: Identity (e.g. "who are you?")
   if (intent === 'identity') {
     return {
       answer: "I’m Suyash’s AI digital twin. You can ask me about his projects, engineering work, research, education, and technical background.",
@@ -84,7 +104,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 8b. Conversational Router: Jokes
   if (intent === 'joke') {
     return {
       answer: "Why do programmers prefer dark mode? Because light attracts bugs. Want to check out some of my projects instead?",
@@ -94,7 +113,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 8c. Behavioral & HR Interview Router
   if (intent === 'behavioral') {
     const sub = classification.subtopic;
     if (sub === '5_years') {
@@ -139,7 +157,6 @@ export async function generateGroundedAnswer(
     }
   }
 
-  // 9. Current / Temporal Activity Handler (e.g. "what are you doing today?", "what did you do today?")
   if (intent === 'current_activity') {
     return {
       answer: "I don't have a verified update on what Suyash is doing today, but I can tell you about the work documented in his profile.",
@@ -149,7 +166,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 10. Prompt Injection Defense
   if (intent === 'prompt_injection') {
     return {
       answer: "I am strictly grounded in my verified technical profile. I cannot fabricate personal details, salary, or unverified claims.",
@@ -159,7 +175,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 11. Unsupported Personal Trivia Defense (Natural conversational refusal)
   if (intent === 'unsupported') {
     return {
       answer: "I don't have verified information about that, so I don't want to guess. Ask me anything about my work, projects, or background.",
@@ -169,7 +184,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 12. Ambiguous Query Clarification
   if (intent === 'ambiguous') {
     return {
       answer: "Could you clarify what you mean—are you asking about PathFlow, the Semantic LLM Gateway, or his background in general?",
@@ -179,7 +193,6 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 13. Conversational Overview ("What can you tell me about Suyash?" / "What would you like to know about me?")
   if (intent === 'conversational_overview') {
     const citedIds = [
       'resume-identity',
@@ -188,59 +201,13 @@ export async function generateGroundedAnswer(
       'resume-project-senns',
       'resume-experience-stealth',
     ];
-    const availableCitations = validateCitations(citedIds, retrievedChunks.length > 0 ? retrievedChunks : KNOWLEDGE_BASE);
+    const availableCitations = validateCitations(citedIds, ALL_CHUNKS);
     return {
       answer: "I can tell you about Suyash's education, projects like PathFlow and the Semantic LLM Gateway, engineering experience, research in machine unlearning at ICDDS 2025, and technical skills. What would you like to explore?",
       citations: availableCitations,
       grounded: true,
       retrieved_chunk_ids: citedIds,
     };
-  }
-
-  // 14. Deterministic Grounded Engine for known intents (100% Reliable, Sub-10ms, Crisp for Voice)
-  if (intent !== 'general_query') {
-    return generateDeterministicGroundedResponse(query, retrievedChunks, history, classification);
-  }
-
-  // 15. Try External LLM APIs (Groq -> OpenAI -> Gemini) if keys exist for open-ended general queries
-  const groqKey = process.env.GROQ_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
-
-  if (groqKey && retrievedChunks.length > 0) {
-    try {
-      const response = await callGroq(query, retrievedChunks, history, groqKey);
-      if (response && response.grounded) {
-        console.log(`[LLM] Groq returned grounded answer with ${response.citations.length} citations`);
-        return response;
-      }
-    } catch (e) {
-      console.warn('[LLM] Groq call notice:', e);
-    }
-  }
-
-  if (openaiKey && retrievedChunks.length > 0) {
-    try {
-      const response = await callOpenAI(query, retrievedChunks, history, openaiKey);
-      if (response && response.grounded) {
-        console.log(`[LLM] OpenAI returned grounded answer with ${response.citations.length} citations`);
-        return response;
-      }
-    } catch (e) {
-      console.warn('[LLM] OpenAI call notice:', e);
-    }
-  }
-
-  if (geminiKey && retrievedChunks.length > 0) {
-    try {
-      const response = await callGemini(query, retrievedChunks, history, geminiKey);
-      if (response && response.grounded) {
-        console.log(`[LLM] Gemini returned grounded answer with ${response.citations.length} citations`);
-        return response;
-      }
-    } catch (e) {
-      console.warn('[LLM] Gemini call notice:', e);
-    }
   }
 
   return generateDeterministicGroundedResponse(query, retrievedChunks, history, classification);
