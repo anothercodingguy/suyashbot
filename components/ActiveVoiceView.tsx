@@ -33,6 +33,7 @@ interface ActiveVoiceViewProps {
 export function ActiveVoiceView({
   state,
   messages,
+  interimTranscript,
   audioLevel,
   isMuted,
   onToggleMute,
@@ -151,6 +152,19 @@ export function ActiveVoiceView({
                     {isMuted
                       ? 'Click Resume to continue talking.'
                       : 'Speak naturally to ask about projects, experience, or research.'}
+                  </p>
+                </div>
+              )}
+
+              {/* Live Speech Recognition Bubble */}
+              {interimTranscript && (
+                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md max-w-lg transition-all animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-pulse" />
+                    <span className="text-[11px] font-mono tracking-wider uppercase text-[#00E5FF]">Listening</span>
+                  </div>
+                  <p className="text-sm sm:text-base text-white font-normal italic">
+                    "{interimTranscript}…"
                   </p>
                 </div>
               )}

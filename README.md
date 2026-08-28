@@ -133,12 +133,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 5. Run the LiveKit Python Agent (Optional / Worker Mode)
 ```bash
-cd agent
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python agent.py dev
+npm run agent
 ```
+*(Or manually: `cd agent && source venv/bin/activate && python agent.py dev`)*
 
 ---
 

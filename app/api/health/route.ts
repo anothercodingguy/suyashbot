@@ -13,7 +13,7 @@ export async function GET() {
         openai: !!process.env.OPENAI_API_KEY,
         gemini: !!process.env.GEMINI_API_KEY,
         livekit: !!(process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
-        tts: !!process.env.OPENAI_API_KEY || !!process.env.TTS_API_KEY,
+        tts: !!(process.env.ELEVENLABS_API_KEY || process.env.XI_API_KEY || process.env.OPENAI_API_KEY || process.env.TTS_API_KEY),
         qdrant: !!process.env.QDRANT_URL,
         retrieval: true,
       },
