@@ -314,6 +314,16 @@ export function searchProfile(
         if (chunk.category === 'project') {
           score += 35;
           matchedTerms.push('intent:projects');
+          const isAskingOther =
+            qLower.includes('other') ||
+            qLower.includes('else') ||
+            qLower.includes('besides') ||
+            qLower.includes('more') ||
+            qLower.includes('another');
+          if (isAskingOther && chunk.id !== 'resume-project-pathflow') {
+            score += 25;
+            matchedTerms.push('other_projects_boost');
+          }
         }
         break;
 

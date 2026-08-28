@@ -650,7 +650,11 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     normalized.includes('projects')
   ) {
     intent = 'projects';
-    expandedKeywords = ['PathFlow', 'Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'projects built'];
+    if (isAskingOtherProjects) {
+      expandedKeywords = ['Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'FastAPI proxy', 'email scheduler', 'machine unlearning', 'PathFlow'];
+    } else {
+      expandedKeywords = ['PathFlow', 'Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'projects built'];
+    }
   }
   // Technical Skills
   else if (
