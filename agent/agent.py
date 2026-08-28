@@ -8,7 +8,14 @@ from livekit.agents import (
     cli,
     llm,
 )
-from livekit.agents.voice_assistant import VoiceAssistant
+try:
+    from livekit.agents.voice import Agent as VoiceAssistant
+except ImportError:
+    try:
+        from livekit.agents.voice_assistant import VoiceAssistant
+    except ImportError:
+        from livekit.agents import VoiceAssistant
+
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 try:
     from livekit.plugins import groq
