@@ -1,5 +1,9 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Web Speech API type shim (not in default lib.dom)
+type SpeechRecognitionType = any;
+
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Room,
@@ -52,7 +56,7 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   const animFrameRef = useRef<number | null>(null);
   const audioElementsRef = useRef<HTMLMediaElement[]>([]);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionType>(null);
   const isAgentInRoomRef = useRef<boolean>(false);
   const speakingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -174,64 +178,8 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
     }
   }, []);
 
-  // Text-to-Speech Output Handler: Prefers server /api/tts (ElevenLabs/OpenAI), falls back to native Web Speech
-  const speakAnswer = useCallback(async (textToSpeak: string) => {
-    // If LiveKit agent is in the room and already streaming audio, let agent handle voice
-    if (isAgentInRoomRef.current) {
-      return;
-    }
-
-    // Strip bracketed citations e.g. [resume-project-senns] before speaking
-    const cleanText = textToSpeak.replace(/\[(?:resume-[a-zA-Z0-9_-]+|[a-zA-Z0-9_-]+)\]/g, '').trim();
-    if (!cleanText) return;
-
-    interruptPlayback();
-    setState('speaking');
-
-    // 1. Try server-side TTS (/api/tts -> ElevenLabs Chris or OpenAI)
-    try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cleanText }),
-      });
-
-      if (res.ok && res.headers.get('content-type')?.includes('audio')) {
-        const audioBlob = await res.blob();
-        if (audioBlob.size > 200) {
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-          activeAudioRef.current = audio;
-
-          startSpeakingVisualizer();
-
-          audio.onended = () => {
-            stopSpeakingVisualizer();
-            activeAudioRef.current = null;
-            URL.revokeObjectURL(audioUrl);
-            if (isCallActiveRef.current) setState('listening');
-          };
-
-          audio.onerror = () => {
-            stopSpeakingVisualizer();
-            activeAudioRef.current = null;
-            URL.revokeObjectURL(audioUrl);
-            fallbackBrowserSpeech(cleanText);
-          };
-
-          await audio.play();
-          return;
-        }
-      }
-    } catch (_err) {
-      console.warn('[TTS API Notice] Falling back to browser speech synthesis:', _err);
-    }
-
-    // 2. Browser Speech Synthesis Fallback (Zero configuration, natural local voice)
-    fallbackBrowserSpeech(cleanText);
-  }, [interruptPlayback]);
-
-  const fallbackBrowserSpeech = (text: string) => {
+  // Browser Speech Synthesis Fallback (Zero configuration, natural local voice)
+  const fallbackBrowserSpeech = useCallback((text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       if (isCallActiveRef.current) setState('listening');
       return;
@@ -269,7 +217,78 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
     };
 
     window.speechSynthesis.speak(utterance);
-  };
+  }, []);
+
+  // Text-to-Speech Output Handler: Prefers server /api/tts (ElevenLabs/OpenAI), falls back to native Web Speech
+  const speakAnswer = useCallback(async (textToSpeak: string) => {
+    // If LiveKit agent is in the room and already streaming audio, let agent handle voice
+    if (isAgentInRoomRef.current) {
+      return;
+    }
+
+    // Strip bracketed citations e.g. [resume-project-senns] before speaking
+    const cleanText = textToSpeak.replace(/\[(?:resume-[a-zA-Z0-9_-]+|[a-zA-Z0-9_-]+)\]/g, '').trim();
+    if (!cleanText) return;
+
+    interruptPlayback();
+    setState('speaking');
+
+    // 1. Try server-side TTS (/api/tts -> ElevenLabs Chris or OpenAI)
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: cleanText }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const audioUrl = URL.createObjectURL(blob);
+          const audio = new Audio(audioUrl);
+          activeAudioRef.current = audio;
+
+          // Connect audio to Web Audio API for visualizer
+          try {
+            const ctx = await getAudioContext();
+            const source = ctx.createMediaElementSource(audio);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            analyser.connect(ctx.destination);
+            localAnalyserRef.current = analyser;
+            startSpeakingVisualizer();
+          } catch (_e) {
+            startSpeakingVisualizer();
+          }
+
+          audio.onended = () => {
+            stopSpeakingVisualizer();
+            activeAudioRef.current = null;
+            URL.revokeObjectURL(audioUrl);
+            if (isCallActiveRef.current) setState('listening');
+          };
+
+          audio.onerror = () => {
+            stopSpeakingVisualizer();
+            activeAudioRef.current = null;
+            URL.revokeObjectURL(audioUrl);
+            fallbackBrowserSpeech(cleanText);
+          };
+
+          await audio.play();
+          return;
+        }
+      }
+    } catch (_err) {
+      console.warn('[TTS API Notice] Falling back to browser speech synthesis:', _err);
+    }
+
+    // 2. Browser Speech Synthesis Fallback (Zero configuration, natural local voice)
+    fallbackBrowserSpeech(cleanText);
+  }, [interruptPlayback, fallbackBrowserSpeech]);
+
+
 
   // Text message handler (for typed or transcribed queries)
   const sendMessage = useCallback(
@@ -332,9 +351,9 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
   const startBrowserSTT = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    const SpeechRecognition =
+    const SpeechRecognitionCtor =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionCtor) {
       console.warn('[STT] Browser SpeechRecognition not supported on this browser.');
       return;
     }
@@ -344,7 +363,7 @@ export function useLiveKitTwin(): UseLiveKitTwinReturn {
         recognitionRef.current.abort();
       }
 
-      const recognition = new SpeechRecognition();
+      const recognition = new SpeechRecognitionCtor();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';

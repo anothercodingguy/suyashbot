@@ -164,7 +164,7 @@ export function ActiveVoiceView({
                     <span className="text-[11px] font-mono tracking-wider uppercase text-[#00E5FF]">Listening</span>
                   </div>
                   <p className="text-sm sm:text-base text-white font-normal italic">
-                    "{interimTranscript}…"
+                    &ldquo;{interimTranscript}…&rdquo;
                   </p>
                 </div>
               )}

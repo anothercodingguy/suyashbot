@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (!message && Array.isArray(body.messages) && body.messages.length > 0) {
       const lastMsg = body.messages[body.messages.length - 1];
       message = lastMsg.content || lastMsg.text || '';
-      history = body.messages.slice(0, -1).map((m: any) => ({
+      history = body.messages.slice(0, -1).map((m: { role?: string; sender?: string; content?: string; text?: string }) => ({
         role: m.role || (m.sender === 'user' ? 'user' : 'assistant'),
         content: m.content || m.text || '',
       }));
