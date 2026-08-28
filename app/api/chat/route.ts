@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const message = body.message || body.query;
-    const history = body.history || [];
+    const history = body.history || body.conversationHistory || [];
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message cannot be empty.' }, { status: 400 });

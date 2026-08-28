@@ -495,7 +495,7 @@ function generateDeterministicGroundedResponse(
       (h) => h.content.toLowerCase().includes('pathflow') || h.citedChunkIds?.includes('resume-project-pathflow')
     );
 
-    if (hasPathflowContext && (qLower.includes('other') || qLower.includes('else') || qLower.includes('besides'))) {
+    if (qLower.includes('other') || qLower.includes('else') || qLower.includes('besides') || hasPathflowContext) {
       return {
         answer:
           "Besides PathFlow, I've built several key systems: the Semantic LLM Gateway (a low-latency FastAPI proxy with sub-50ms Qdrant caching), ReachInbox (a concurrent distributed email scheduler), and SENNs (peer-reviewed research in machine unlearning accepted at ICDDS 2025).",
