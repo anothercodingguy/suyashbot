@@ -242,5 +242,16 @@ describe('Voicebot Natural Conversational & Grounded Acceptance Tests', () => {
     expect(res.grounded).toBe(true);
     expect(res.answer).toMatch(/programmers prefer dark mode/i);
   });
+
+  // Test 24: Multi-turn Pronoun Follow-up — "what have you done in that" after SENNs
+  it('Test 24: Multi-turn Pronoun Follow-up -> Resolves "that" to SENNs research contributions', async () => {
+    const history = [
+      { role: 'user' as const, content: 'what is senns?' },
+      { role: 'assistant' as const, content: 'SENNs stands for Self-Erasing Neural Networks, research on GDPR machine unlearning.' },
+    ];
+    const res = await generateGroundedAnswer('what have you done in that', history);
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/neurogenesis|prun|leakage|metric|pytorch|unlearning|icdds/i);
+  });
 });
 

@@ -47,8 +47,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const message = body.message || body.query;
-    const history = body.history || body.conversationHistory || [];
+    let message = body.message || body.query;
+    let history = body.history || body.conversationHistory || [];
+
+    // Support standard OpenAI/Chat completions messages array
+    if (!message && Array.isArray(body.messages) && body.messages.length > 0) {
+      const lastMsg = body.messages[body.messages.length - 1];
+      message = lastMsg.content || lastMsg.text || '';
+      history = body.messages.slice(0, -1).map((m: any) => ({
+        role: m.role || (m.sender === 'user' ? 'user' : 'assistant'),
+        content: m.content || m.text || '',
+      }));
+    }
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'Message cannot be empty.' }, { status: 400 });

@@ -1,6 +1,7 @@
 import { KnowledgeChunk, KNOWLEDGE_BASE, ALL_CHUNKS } from '../knowledge/chunks';
 import {
   SYSTEM_GROUNDING_PROMPT,
+  buildChatMessages,
   buildPromptWithContext,
   validateCitations,
   extractCitationsFromText,
@@ -247,7 +248,7 @@ async function callGroq(
   history: ConversationTurn[],
   apiKey: string
 ): Promise<GroundedResponse | null> {
-  const userPrompt = buildPromptWithContext(query, ALL_CHUNKS, history);
+  const chatMessages = buildChatMessages(query, history);
   const candidateModels = [
     process.env.GROQ_MODEL,
     'openai/gpt-oss-120b',
@@ -267,10 +268,7 @@ async function callGroq(
         },
         body: JSON.stringify({
           model,
-          messages: [
-            { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
-            { role: 'user', content: userPrompt },
-          ],
+          messages: chatMessages,
           temperature: 0.2,
           max_tokens: 350,
         }),
@@ -307,7 +305,7 @@ async function callOpenAI(
   history: ConversationTurn[],
   apiKey: string
 ): Promise<GroundedResponse | null> {
-  const userPrompt = buildPromptWithContext(query, ALL_CHUNKS, history);
+  const chatMessages = buildChatMessages(query, history);
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -317,10 +315,7 @@ async function callOpenAI(
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
+      messages: chatMessages,
       temperature: 0.2,
       max_tokens: 350,
     }),

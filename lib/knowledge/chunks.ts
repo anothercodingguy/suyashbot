@@ -292,7 +292,7 @@ export const KNOWLEDGE_BASE: KnowledgeChunk[] = [
     category: 'project',
     title: 'Research — Self-Erasing Neural Networks (SENNs), ICDDS 2025',
     content:
-      'Self-Erasing Neural Networks (SENNs) Research Publication, ICDDS 2025. Technologies: Python, PyTorch, Data Structures & Algorithms. Experimental Systems: Co-authored a peer-reviewed paper designing a complex algorithmic framework for GDPR-compliant machine unlearning, accepted at the ICDDS 2025 international conference. Data Analysis & Visualization: Developed rigorous diagnostic pipelines to evaluate weight shifts and per-class accuracy trade-offs, visualizing performance metrics across gradient-based data erasure models.',
+      'Self-Erasing Neural Networks (SENNs): A Neurogenesis-Inspired Framework for GDPR-Compliant Machine Unlearning (Accepted at ICDDS 2025, IIIT Dharwad). Technologies: Python, PyTorch, Data Structures & Algorithms. My Role & Contributions: 1) Designed the neurogenesis-inspired algorithmic framework to selectively prune and unlearn class weights without retraining the entire model from scratch. 2) Formulated mathematical unlearning verification metrics to prove zero data leakage while preserving accuracy across adjacent classes. 3) Implemented and benchmarked the framework in PyTorch against baseline retrained networks, developing diagnostic pipelines to evaluate weight shifts and per-class accuracy trade-offs.',
     technologies: ['Python', 'PyTorch', 'Data Structures & Algorithms'],
     keywords: [
       'senns',

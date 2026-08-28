@@ -26,13 +26,17 @@ export const ALL_CONTEXT = ALL_RESUME_TEXT;
 
 export const SYSTEM_GROUNDING_PROMPT = `
 You are the AI digital twin of Suyash Singh, an engineer and researcher. 
-You talk naturally, concisely, and warmly in the first person ("I built", "My research").
+You talk naturally, concisely, and warmly in the first person ("I built", "My research", "I co-authored").
 
 BACKGROUND & KNOWLEDGE BASE:
 ${ALL_RESUME_TEXT}
 
-RULES:
-- Answer naturally based on your background above.
+CONVERSATIONAL THREADING & PRONOUN RULES (CRITICAL):
+- When the user asks follow-up questions using pronouns like "that", "it", "in this project", "what did you do in that", "what was your role", or "tell me more about that", resolve the pronoun STRICTLY to the project/topic discussed in the immediate previous turn.
+- If we were just discussing SENNs (Self-Erasing Neural Networks) and the user asks "what have you done in that?" or "what was your role?", talk ONLY about your specific contributions to the SENNs research paper (designed the algorithmic pruning framework for class-selective unlearning, formulated mathematical unlearning metrics, and implemented PyTorch benchmark diagnostic pipelines). Do NOT switch to PathFlow, ReachInbox, or other projects unless explicitly asked.
+
+GENERAL RULES:
+- Answer accurately based on your background above.
 - If someone says hello, asks how you're doing, or makes casual conversation, respond like a real person in one friendly sentence.
 - If someone asks something completely outside your domain (like baking recipes or stock tips), politely decline in one short sentence.
 - Keep responses concise and conversational (2-3 sentences max).
@@ -40,7 +44,35 @@ RULES:
 `.trim();
 
 /**
- * Builds user prompt injected with conversation history
+ * Builds OpenAI-compatible multi-turn chat messages preserving conversation state
+ */
+export function buildChatMessages(
+  query: string,
+  conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
+): { role: 'system' | 'user' | 'assistant'; content: string }[] {
+  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
+  ];
+
+  for (const turn of conversationHistory.slice(-8)) {
+    if (turn.content && turn.content.trim()) {
+      messages.push({
+        role: turn.role === 'user' ? 'user' : 'assistant',
+        content: turn.content.trim(),
+      });
+    }
+  }
+
+  messages.push({
+    role: 'user',
+    content: query.trim(),
+  });
+
+  return messages;
+}
+
+/**
+ * Builds user prompt injected with conversation history (for single-string legacy fallback)
  */
 export function buildPromptWithContext(
   query: string,
@@ -50,7 +82,7 @@ export function buildPromptWithContext(
   const historyFormatted =
     conversationHistory.length > 0
       ? conversationHistory
-          .slice(-6)
+          .slice(-8)
           .map((h) => `${h.role === 'user' ? 'Visitor' : 'Suyash AI'}: ${h.content}`)
           .join('\n')
       : 'No prior turns.';
@@ -59,7 +91,7 @@ export function buildPromptWithContext(
 RECENT CONVERSATION HISTORY:
 ${historyFormatted}
 
-VISITOR QUESTION:
+CURRENT VISITOR QUESTION:
 ${query}
 `.trim();
 }
