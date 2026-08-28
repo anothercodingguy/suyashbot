@@ -154,6 +154,10 @@ const GREETING_WORDS = new Set([
   'suyash',
   'bot',
   'ai',
+  'wassup',
+  'sup',
+  'gm',
+  'gn',
 ]);
 
 /**
@@ -341,7 +345,7 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     };
   }
 
-  // 8. Smalltalk (e.g. "how are you", "how's it going", "what's up")
+  // 8. Smalltalk (e.g. "how are you", "how's it going", "what's up", "wassup", "how you doin")
   if (
     normalized === 'how are you' ||
     normalized === 'how are you doing' ||
@@ -350,6 +354,10 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     normalized === 'hows it going' ||
     normalized === "what's up" ||
     normalized === 'whats up' ||
+    normalized === 'wassup' ||
+    normalized === 'sup' ||
+    normalized === 'how you doin' ||
+    normalized === 'how you doing' ||
     normalized === 'how do you do'
   ) {
     return {
@@ -498,10 +506,17 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     normalized.includes('semantic llm') ||
     normalized.includes('semantic gateway') ||
     normalized.includes('routing proxy') ||
+    normalized.includes('caching proxy') ||
     (normalized.includes('gateway') && !normalized.includes('pathflow'))
   ) {
     detectedEntity = 'Semantic LLM Gateway';
-  } else if (normalized.includes('senns') || normalized.includes('self erasing') || normalized.includes('unlearning')) {
+  } else if (
+    normalized.includes('senn') ||
+    normalized.includes('senns') ||
+    normalized.includes('self erasing') ||
+    normalized.includes('self-erasing') ||
+    normalized.includes('unlearning')
+  ) {
     detectedEntity = 'SENNs';
   } else if (normalized.includes('reachinbox')) {
     detectedEntity = 'ReachInbox';

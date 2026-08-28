@@ -248,37 +248,57 @@ async function callGroq(
   apiKey: string
 ): Promise<GroundedResponse | null> {
   const userPrompt = buildPromptWithContext(query, ALL_CHUNKS, history);
+  const candidateModels = [
+    process.env.GROQ_MODEL,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b',
+    'llama-3.3-70b-versatile',
+    'groq/compound',
+  ].filter(Boolean) as string[];
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.2,
-      max_tokens: 350,
-    }),
-  });
+  for (const model of candidateModels) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 350,
+        }),
+      });
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rawContent = data.choices[0]?.message?.content;
-  if (!rawContent) return null;
+      if (!res.ok) {
+        console.warn(`[LLM] Groq model '${model}' returned ${res.status}, trying next model...`);
+        continue;
+      }
 
-  const parsed = parseModelResponse(rawContent);
+      const data = await res.json();
+      const rawContent = data.choices?.[0]?.message?.content;
+      if (!rawContent) continue;
 
-  return {
-    answer: parsed.answer,
-    citations: parsed.citations,
-    grounded: parsed.grounded,
-    retrieved_chunk_ids: ALL_CHUNKS.map((c) => c.id),
-  };
+      const parsed = parseModelResponse(rawContent);
+
+      return {
+        answer: parsed.answer,
+        citations: parsed.citations,
+        grounded: parsed.grounded,
+        retrieved_chunk_ids: ALL_CHUNKS.map((c) => c.id),
+      };
+    } catch (err) {
+      console.warn(`[LLM] Error calling Groq with model '${model}':`, err);
+    }
+  }
+
+  return null;
 }
 
 async function callOpenAI(

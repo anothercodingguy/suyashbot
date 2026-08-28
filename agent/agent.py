@@ -107,18 +107,19 @@ async def entrypoint(ctx: JobContext):
         logger.warning("[STT] No dedicated STT key found, attempting default Deepgram STT")
         stt_provider = deepgram.STT(model="nova-2", language="en")
 
-    # Determine LLM Provider (Groq Llama-3.3-70b -> OpenAI gpt-4o-mini)
+    # Determine LLM Provider (Groq -> OpenAI gpt-4o-mini)
     groq_api_key = os.getenv("GROQ_API_KEY")
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     if groq_api_key:
         if HAS_GROQ_PLUGIN:
-            logger.info("[LLM] Initializing LiveKit Groq plugin (llama-3.3-70b-versatile)")
-            llm_provider = groq.LLM(model="llama-3.3-70b-versatile")
+            logger.info(f"[LLM] Initializing LiveKit Groq plugin ({groq_model})")
+            llm_provider = groq.LLM(model=groq_model)
         else:
-            logger.info("[LLM] Initializing Groq LLM via OpenAI compatible endpoint (llama-3.3-70b-versatile)")
+            logger.info(f"[LLM] Initializing Groq LLM via OpenAI compatible endpoint ({groq_model})")
             llm_provider = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 api_key=groq_api_key,
-                model="llama-3.3-70b-versatile",
+                model=groq_model,
             )
     else:
         logger.info("[LLM] Initializing OpenAI gpt-4o-mini LLM")
