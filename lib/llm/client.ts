@@ -82,6 +82,61 @@ export async function generateGroundedAnswer(
     };
   }
 
+  // 8b. Conversational Router: Jokes
+  if (intent === 'joke') {
+    return {
+      answer: "Why do programmers prefer dark mode? Because light attracts bugs. Want to check out some of my projects instead?",
+      citations: [],
+      grounded: true,
+      retrieved_chunk_ids: [],
+    };
+  }
+
+  // 8c. Behavioral & HR Interview Router
+  if (intent === 'behavioral') {
+    const sub = classification.subtopic;
+    if (sub === '5_years') {
+      return {
+        answer: "In five years, I see myself leading infrastructure teams building high-throughput distributed systems and real-time AI platforms, tackling core latency and scale bottlenecks.",
+        citations: [],
+        grounded: true,
+        retrieved_chunk_ids: [],
+      };
+    }
+    if (sub === 'strength') {
+      return {
+        answer: "My biggest strength is bridging systems engineering with machine learning—from low-latency WebRTC and distributed caches to neural network research.",
+        citations: [],
+        grounded: true,
+        retrieved_chunk_ids: [],
+      };
+    }
+    if (sub === 'weakness') {
+      return {
+        answer: "I tend to dive deep into performance micro-optimizations early, but I've learned to balance that by focusing on shipping end-to-end working prototypes first.",
+        citations: [],
+        grounded: true,
+        retrieved_chunk_ids: [],
+      };
+    }
+    if (sub === 'why_hire') {
+      return {
+        answer: "I bring hands-on experience shipping real distributed architectures, published ML research, and a strong bias toward execution and clean system design.",
+        citations: [],
+        grounded: true,
+        retrieved_chunk_ids: [],
+      };
+    }
+    if (sub === 'conflict_deadlines') {
+      return {
+        answer: "I prioritize ruthlessly, communicate architectural trade-offs early, and focus on decoupling complex problems into independent, testable deliverables.",
+        citations: [],
+        grounded: true,
+        retrieved_chunk_ids: [],
+      };
+    }
+  }
+
   // 9. Current / Temporal Activity Handler (e.g. "what are you doing today?", "what did you do today?")
   if (intent === 'current_activity') {
     return {

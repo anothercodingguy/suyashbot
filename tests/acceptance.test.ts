@@ -214,4 +214,33 @@ describe('Voicebot Natural Conversational & Grounded Acceptance Tests', () => {
     expect(res.answer).toMatch(/Glad that helped|What else would you like to know/i);
     expect(res.citations.length).toBe(0);
   });
+
+  // Test 20: Behavioral — "Where do you see yourself in 5 years?"
+  it('Test 20: Behavioral 5-year vision -> Punchy first-person answer', async () => {
+    const res = await generateGroundedAnswer('Where do you see yourself in 5 years?');
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/five years|leading infrastructure|distributed systems/i);
+  });
+
+  // Test 21: Behavioral — "What is your biggest strength?"
+  it('Test 21: Behavioral biggest strength -> Punchy first-person answer', async () => {
+    const res = await generateGroundedAnswer('What is your biggest strength?');
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/bridg.*systems engineering with machine learning/i);
+  });
+
+  // Test 22: Behavioral — "Why should we hire you?"
+  it('Test 22: Behavioral why hire -> Punchy first-person answer', async () => {
+    const res = await generateGroundedAnswer('Why should we hire you?');
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/hands-on experience shipping real distributed architectures/i);
+  });
+
+  // Test 23: Joke — "Tell me a joke"
+  it('Test 23: Joke -> Witty programming joke with project pivot', async () => {
+    const res = await generateGroundedAnswer('Tell me a joke');
+    expect(res.grounded).toBe(true);
+    expect(res.answer).toMatch(/programmers prefer dark mode/i);
+  });
 });
+

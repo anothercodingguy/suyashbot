@@ -6,7 +6,9 @@ export type QueryIntent =
   | 'confirmation'
   | 'farewell'
   | 'smalltalk'
+  | 'joke'
   | 'identity'
+  | 'behavioral'
   | 'current_activity'
   | 'conversational_overview'
   | 'profile_overview'
@@ -358,6 +360,69 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
       detectedEntity: null,
       subtopic: null,
       expandedKeywords: [],
+      resolvedContextQuery: rawQuery,
+    };
+  }
+
+  // 8b. Jokes / Fun
+  if (
+    normalized.includes('tell me a joke') ||
+    normalized.includes('tell a joke') ||
+    normalized === 'joke' ||
+    normalized.includes('make me laugh') ||
+    normalized.includes('say something funny')
+  ) {
+    return {
+      rawQuery,
+      normalizedQuery: normalized,
+      intent: 'joke',
+      isConversational: true,
+      detectedEntity: null,
+      subtopic: null,
+      expandedKeywords: [],
+      resolvedContextQuery: rawQuery,
+    };
+  }
+
+  // 8c. Behavioral & HR Questions
+  if (
+    normalized.includes('5 years') ||
+    normalized.includes('five years') ||
+    normalized.includes('where do you see yourself') ||
+    normalized.includes('biggest strength') ||
+    normalized.includes('core strength') ||
+    normalized.includes('greatest strength') ||
+    normalized.includes('biggest weakness') ||
+    normalized.includes('greatest weakness') ||
+    normalized.includes('areas for improvement') ||
+    normalized.includes('why should we hire') ||
+    normalized.includes('why should someone hire') ||
+    normalized.includes('why hire') ||
+    normalized.includes('handle conflict') ||
+    normalized.includes('tight deadlines') ||
+    normalized.includes('handle pressure')
+  ) {
+    let sub: string | null = null;
+    if (normalized.includes('5 years') || normalized.includes('five years') || normalized.includes('see yourself')) {
+      sub = '5_years';
+    } else if (normalized.includes('strength')) {
+      sub = 'strength';
+    } else if (normalized.includes('weakness') || normalized.includes('improvement')) {
+      sub = 'weakness';
+    } else if (normalized.includes('hire')) {
+      sub = 'why_hire';
+    } else if (normalized.includes('conflict') || normalized.includes('deadline') || normalized.includes('pressure')) {
+      sub = 'conflict_deadlines';
+    }
+
+    return {
+      rawQuery,
+      normalizedQuery: normalized,
+      intent: 'behavioral',
+      isConversational: false,
+      detectedEntity: null,
+      subtopic: sub,
+      expandedKeywords: ['Suyash Singh behavioral engineering vision and career'],
       resolvedContextQuery: rawQuery,
     };
   }
