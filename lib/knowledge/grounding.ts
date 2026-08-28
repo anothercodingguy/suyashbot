@@ -79,9 +79,34 @@ export function buildPromptWithContext(
   retrievedChunks: KnowledgeChunk[],
   conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
 ): string {
+  const qLower = query.toLowerCase();
+  const isAskingOther =
+    qLower.includes('other') ||
+    qLower.includes('else') ||
+    qLower.includes('besides') ||
+    qLower.includes('apart from');
+
+  let orderedChunks = [...retrievedChunks];
+  if (isAskingOther && conversationHistory.length > 0) {
+    const prevDiscussedIds = new Set<string>();
+    for (const turn of conversationHistory) {
+      if (turn.content.toLowerCase().includes('pathflow')) prevDiscussedIds.add('resume-project-pathflow');
+      if (turn.content.toLowerCase().includes('semantic') || turn.content.toLowerCase().includes('gateway')) prevDiscussedIds.add('resume-project-semantic-llm');
+      if (turn.content.toLowerCase().includes('senns') || turn.content.toLowerCase().includes('unlearning')) prevDiscussedIds.add('resume-project-senns');
+      if (turn.content.toLowerCase().includes('reachinbox')) prevDiscussedIds.add('resume-project-reachinbox');
+    }
+
+    // Sort already discussed chunks to the end, and new chunks to the front
+    orderedChunks.sort((a, b) => {
+      const aDiscussed = prevDiscussedIds.has(a.id) ? 1 : 0;
+      const bDiscussed = prevDiscussedIds.has(b.id) ? 1 : 0;
+      return aDiscussed - bDiscussed;
+    });
+  }
+
   const contextFormatted =
-    retrievedChunks.length > 0
-      ? retrievedChunks
+    orderedChunks.length > 0
+      ? orderedChunks
           .map(
             (c, idx) =>
               `[CHUNK ${idx + 1}] ID: ${c.id} | Source: ${c.source} | Section: ${c.section} | Entity: ${c.entity} | Page: ${c.page}\nContent: ${c.content}`
@@ -97,6 +122,10 @@ export function buildPromptWithContext(
           .join('\n')
       : 'No prior turns.';
 
+  const guidance = isAskingOther
+    ? '\n[CRITICAL NOTE: The visitor is asking about OTHER projects. Summarize the other projects from the retrieved chunks (e.g. Semantic LLM Gateway, ReachInbox, SENNs) rather than repeating what was already discussed.]\n'
+    : '';
+
   return `
 --- RETRIEVED VERIFIED SOURCES ---
 ${contextFormatted}
@@ -106,7 +135,7 @@ ${historyFormatted}
 
 --- CURRENT VISITOR QUESTION ---
 ${query}
-
+${guidance}
 Respond strictly in JSON format as specified in system instructions.
 `.trim();
 }
