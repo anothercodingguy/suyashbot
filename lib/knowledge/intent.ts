@@ -575,6 +575,28 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
       'skills',
     ];
   }
+  // Projects General & Other Projects (Checked BEFORE specific entity overrides)
+  else if (
+    isAskingOtherProjects ||
+    normalized.includes('what has he built') ||
+    normalized.includes('what projects has he worked on') ||
+    normalized.includes('what projects') ||
+    normalized.includes('what other projects') ||
+    normalized.includes('other projects') ||
+    normalized.includes('what other') ||
+    normalized.includes('what else') ||
+    normalized.includes('tell me about his projects') ||
+    normalized.includes('built') ||
+    normalized.includes('projects')
+  ) {
+    intent = 'projects';
+    detectedEntity = null; // Clear single entity override
+    if (isAskingOtherProjects) {
+      expandedKeywords = ['Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'FastAPI proxy', 'email scheduler', 'machine unlearning', 'PathFlow'];
+    } else {
+      expandedKeywords = ['PathFlow', 'Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'projects built'];
+    }
+  }
   // PathFlow Specific
   else if (
     detectedEntity === 'PathFlow' ||
@@ -634,27 +656,6 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
   ) {
     intent = 'work_experience';
     expandedKeywords = ['Stealth Startup', 'AI Intern', 'AWS distributed inference', 'IEEE Computer Society', 'R&D Intern', 'work experience'];
-  }
-  // Projects General & Other Projects
-  else if (
-    isAskingOtherProjects ||
-    normalized.includes('what has he built') ||
-    normalized.includes('what projects has he worked on') ||
-    normalized.includes('what projects') ||
-    normalized.includes('what other projects') ||
-    normalized.includes('other projects') ||
-    normalized.includes('what other') ||
-    normalized.includes('what else') ||
-    normalized.includes('tell me about his projects') ||
-    normalized.includes('built') ||
-    normalized.includes('projects')
-  ) {
-    intent = 'projects';
-    if (isAskingOtherProjects) {
-      expandedKeywords = ['Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'FastAPI proxy', 'email scheduler', 'machine unlearning', 'PathFlow'];
-    } else {
-      expandedKeywords = ['PathFlow', 'Semantic LLM Gateway', 'ReachInbox', 'SENNs', 'projects built'];
-    }
   }
   // Technical Skills
   else if (
