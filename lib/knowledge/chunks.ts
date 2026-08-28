@@ -406,3 +406,6 @@ export const KNOWLEDGE_BASE: KnowledgeChunk[] = [
     source_type: 'resume',
   },
 ];
+
+export const ALL_CHUNKS = KNOWLEDGE_BASE;
+

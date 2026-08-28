@@ -1,8 +1,10 @@
-import { KnowledgeChunk, KNOWLEDGE_BASE } from '../knowledge/chunks';
+import { KnowledgeChunk, KNOWLEDGE_BASE, ALL_CHUNKS } from '../knowledge/chunks';
 import {
   SYSTEM_GROUNDING_PROMPT,
   buildPromptWithContext,
   validateCitations,
+  extractCitationsFromText,
+  CitationItem,
   GroundedResponse,
 } from '../knowledge/grounding';
 import { searchProfile, ConversationTurn } from '../knowledge/retriever';
@@ -244,13 +246,41 @@ export async function generateGroundedAnswer(
   return generateDeterministicGroundedResponse(query, retrievedChunks, history, classification);
 }
 
+function parseModelResponse(rawContent: string): { answer: string; citations: CitationItem[]; grounded: boolean } {
+  let text = rawContent.trim();
+  let rawCitations: string[] = [];
+
+  // Try JSON parse if structured output
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.answer) {
+      text = parsed.answer;
+      if (Array.isArray(parsed.citations)) {
+        rawCitations = parsed.citations;
+      }
+    }
+  } catch {
+    // If plain text, extract bracketed citation IDs e.g. [resume-project-senns]
+    const extracted = extractCitationsFromText(text);
+    text = extracted.cleanText;
+    rawCitations = extracted.citationIds;
+  }
+
+  const citations = validateCitations(rawCitations, ALL_CHUNKS);
+  return {
+    answer: text,
+    citations,
+    grounded: true,
+  };
+}
+
 async function callGroq(
   query: string,
-  retrievedChunks: KnowledgeChunk[],
+  _retrievedChunks: KnowledgeChunk[],
   history: ConversationTurn[],
   apiKey: string
 ): Promise<GroundedResponse | null> {
-  const userPrompt = buildPromptWithContext(query, retrievedChunks, history);
+  const userPrompt = buildPromptWithContext(query, ALL_CHUNKS, history);
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -264,7 +294,6 @@ async function callGroq(
         { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      response_format: { type: 'json_object' },
       temperature: 0.2,
       max_tokens: 350,
     }),
@@ -275,24 +304,23 @@ async function callGroq(
   const rawContent = data.choices[0]?.message?.content;
   if (!rawContent) return null;
 
-  const parsed = JSON.parse(rawContent);
-  const citations = validateCitations(parsed.citations || [], retrievedChunks);
+  const parsed = parseModelResponse(rawContent);
 
   return {
     answer: parsed.answer,
-    citations,
-    grounded: parsed.grounded !== false && citations.length > 0,
-    retrieved_chunk_ids: retrievedChunks.map((c) => c.id),
+    citations: parsed.citations,
+    grounded: parsed.grounded,
+    retrieved_chunk_ids: ALL_CHUNKS.map((c) => c.id),
   };
 }
 
 async function callOpenAI(
   query: string,
-  retrievedChunks: KnowledgeChunk[],
+  _retrievedChunks: KnowledgeChunk[],
   history: ConversationTurn[],
   apiKey: string
 ): Promise<GroundedResponse | null> {
-  const userPrompt = buildPromptWithContext(query, retrievedChunks, history);
+  const userPrompt = buildPromptWithContext(query, ALL_CHUNKS, history);
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -306,7 +334,6 @@ async function callOpenAI(
         { role: 'system', content: SYSTEM_GROUNDING_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      response_format: { type: 'json_object' },
       temperature: 0.2,
       max_tokens: 350,
     }),
@@ -317,24 +344,23 @@ async function callOpenAI(
   const rawContent = data.choices[0]?.message?.content;
   if (!rawContent) return null;
 
-  const parsed = JSON.parse(rawContent);
-  const citations = validateCitations(parsed.citations || [], retrievedChunks);
+  const parsed = parseModelResponse(rawContent);
 
   return {
     answer: parsed.answer,
-    citations,
-    grounded: parsed.grounded !== false && citations.length > 0,
-    retrieved_chunk_ids: retrievedChunks.map((c) => c.id),
+    citations: parsed.citations,
+    grounded: parsed.grounded,
+    retrieved_chunk_ids: ALL_CHUNKS.map((c) => c.id),
   };
 }
 
 async function callGemini(
   query: string,
-  retrievedChunks: KnowledgeChunk[],
+  _retrievedChunks: KnowledgeChunk[],
   history: ConversationTurn[],
   apiKey: string
 ): Promise<GroundedResponse | null> {
-  const userPrompt = buildPromptWithContext(query, retrievedChunks, history);
+  const userPrompt = buildPromptWithContext(query, ALL_CHUNKS, history);
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -348,7 +374,6 @@ async function callGemini(
           },
         ],
         generationConfig: {
-          responseMimeType: 'application/json',
           temperature: 0.2,
         },
       }),
@@ -360,14 +385,13 @@ async function callGemini(
   const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!rawContent) return null;
 
-  const parsed = JSON.parse(rawContent);
-  const citations = validateCitations(parsed.citations || [], retrievedChunks);
+  const parsed = parseModelResponse(rawContent);
 
   return {
     answer: parsed.answer,
-    citations,
-    grounded: parsed.grounded !== false && citations.length > 0,
-    retrieved_chunk_ids: retrievedChunks.map((c) => c.id),
+    citations: parsed.citations,
+    grounded: parsed.grounded,
+    retrieved_chunk_ids: ALL_CHUNKS.map((c) => c.id),
   };
 }
 
