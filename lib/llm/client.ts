@@ -140,7 +140,12 @@ export async function generateGroundedAnswer(
     };
   }
 
-  // 12. Try External LLM APIs (Groq -> OpenAI -> Gemini) if keys exist for complex natural queries
+  // 14. Deterministic Grounded Engine for known intents (100% Reliable, Sub-10ms, Crisp for Voice)
+  if (intent !== 'general_query') {
+    return generateDeterministicGroundedResponse(query, retrievedChunks, history, classification);
+  }
+
+  // 15. Try External LLM APIs (Groq -> OpenAI -> Gemini) if keys exist for open-ended general queries
   const groqKey = process.env.GROQ_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -181,7 +186,6 @@ export async function generateGroundedAnswer(
     }
   }
 
-  // 13. Deterministic Grounded Engine (100% Reliable, Crisp & Concise for Voice)
   return generateDeterministicGroundedResponse(query, retrievedChunks, history, classification);
 }
 
