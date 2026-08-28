@@ -379,7 +379,14 @@ function generateDeterministicGroundedResponse(
   }
 
   // 4. PathFlow Intent (including subtopics like visualization, stack)
-  if (intent === 'pathflow') {
+  if (
+    intent === 'pathflow' ||
+    classification.detectedEntity === 'PathFlow' ||
+    qLower.includes('pathflow') ||
+    qLower.includes('path flow') ||
+    qLower.includes('path-flow') ||
+    retrievedChunks.some((c) => c.id === 'resume-project-pathflow')
+  ) {
     const pathChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-pathflow') ||
       KNOWLEDGE_BASE.find((c) => c.id === 'resume-project-pathflow')!;
@@ -413,7 +420,14 @@ function generateDeterministicGroundedResponse(
   }
 
   // 5. Semantic LLM Gateway Intent ("What is the Semantic LLM Gateway?")
-  if (intent === 'semantic_gateway') {
+  if (
+    intent === 'semantic_gateway' ||
+    classification.detectedEntity === 'Semantic LLM Gateway' ||
+    qLower.includes('semantic gateway') ||
+    qLower.includes('semantic llm') ||
+    (qLower.includes('gateway') && !qLower.includes('pathflow')) ||
+    retrievedChunks.some((c) => c.id === 'resume-project-semantic-llm')
+  ) {
     const semChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-semantic-llm') ||
       KNOWLEDGE_BASE.find((c) => c.id === 'resume-project-semantic-llm')!;
@@ -428,7 +442,13 @@ function generateDeterministicGroundedResponse(
   }
 
   // 6. Research / SENNs Intent ("What is SENNs?", "Tell me about your research")
-  if (intent === 'research') {
+  if (
+    intent === 'research' ||
+    classification.detectedEntity === 'SENNs' ||
+    qLower.includes('senns') ||
+    qLower.includes('unlearning') ||
+    retrievedChunks.some((c) => c.id === 'resume-project-senns')
+  ) {
     const sennChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-senns') ||
       KNOWLEDGE_BASE.find((c) => c.id === 'resume-project-senns')!;
@@ -443,7 +463,13 @@ function generateDeterministicGroundedResponse(
   }
 
   // 7. ReachInbox Intent
-  if (intent === 'reachinbox') {
+  if (
+    intent === 'reachinbox' ||
+    classification.detectedEntity === 'ReachInbox' ||
+    qLower.includes('reachinbox') ||
+    qLower.includes('reach inbox') ||
+    retrievedChunks.some((c) => c.id === 'resume-project-reachinbox')
+  ) {
     const reachChunk =
       retrievedChunks.find((c) => c.id === 'resume-project-reachinbox') ||
       KNOWLEDGE_BASE.find((c) => c.id === 'resume-project-reachinbox')!;

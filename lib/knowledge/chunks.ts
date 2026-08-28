@@ -204,6 +204,8 @@ export const KNOWLEDGE_BASE: KnowledgeChunk[] = [
     technologies: ['Next.js 15', 'TypeScript', 'Tailwind CSS', 'React Flow', 'Prisma', 'OpenTelemetry', 'Python'],
     keywords: [
       'pathflow',
+      'path flow',
+      'path-flow',
       'strava for ai agents',
       'agent observability',
       'dag',

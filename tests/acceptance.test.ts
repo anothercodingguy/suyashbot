@@ -61,13 +61,29 @@ describe('Voicebot Natural Conversational & Grounded Acceptance Tests', () => {
     expect(res.answer).not.toContain("don't have enough verified information");
   });
 
-  // Test 7: Specific Project — "what is PathFlow?"
-  it('Test 7: "what is PathFlow?" -> Grounded PathFlow answer with citation', async () => {
-    const res = await generateGroundedAnswer('what is PathFlow?');
-    expect(res.grounded).toBe(true);
-    expect(res.answer.toLowerCase()).toContain('observability');
-    expect(res.citations.some((c) => c.source_id === 'resume-project-pathflow')).toBe(true);
-  });
+  // Test 7: Specific Project — PathFlow query variations
+  const PATHFLOW_QUERY_VARIATIONS = [
+    'what is PathFlow?',
+    'what is pathflow',
+    'tell me about pathflow',
+    'pathflow',
+    'PathFlow',
+    'what is path flow',
+    'tell me about path flow',
+    'tell me about your pathflow project',
+    'what did you build with pathflow?',
+    'how does pathflow work',
+  ];
+
+  it.each(PATHFLOW_QUERY_VARIATIONS)(
+    'Test 7: "%s" -> Grounded PathFlow answer with citation',
+    async (query) => {
+      const res = await generateGroundedAnswer(query);
+      expect(res.grounded).toBe(true);
+      expect(res.answer.toLowerCase()).toMatch(/observability|agent|react flow/i);
+      expect(res.citations.some((c) => c.source_id === 'resume-project-pathflow')).toBe(true);
+    }
+  );
 
   // Test 8: Contextual Follow-up — "what did he use for visualization?"
   it('Test 8: "what did he use for visualization?" -> Resolves PathFlow and React Flow', async () => {

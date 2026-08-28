@@ -24,8 +24,14 @@ export interface SearchProfileReturn {
 const ENTITY_ALIASES: Record<string, string[]> = {
   'resume-project-pathflow': [
     'pathflow',
+    'path flow',
+    'path-flow',
+    'path_flow',
     'strava for ai agents',
+    'strava for ai',
+    'strava',
     'agent observability',
+    'observability',
     'execution tree',
     'dag visualizer',
     'dag',

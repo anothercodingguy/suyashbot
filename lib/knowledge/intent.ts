@@ -419,7 +419,15 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
   let detectedEntity: string | null = null;
   let subtopic: string | null = null;
 
-  if (normalized.includes('pathflow') || normalized.includes('strava for ai')) {
+  if (
+    normalized.includes('pathflow') ||
+    normalized.includes('path flow') ||
+    normalized.includes('path-flow') ||
+    normalized.includes('strava for ai') ||
+    normalized.includes('strava') ||
+    normalized.includes('dag visualizer') ||
+    normalized.includes('agent observability')
+  ) {
     detectedEntity = 'PathFlow';
   } else if (
     normalized.includes('semantic llm') ||
@@ -555,7 +563,13 @@ export function classifyQuery(rawQuery: string, history: ConversationTurn[] = []
     ];
   }
   // PathFlow Specific
-  else if (detectedEntity === 'PathFlow' || normalized.includes('pathflow')) {
+  else if (
+    detectedEntity === 'PathFlow' ||
+    normalized.includes('pathflow') ||
+    normalized.includes('path flow') ||
+    normalized.includes('path-flow') ||
+    normalized.includes('strava')
+  ) {
     intent = 'pathflow';
     expandedKeywords = ['PathFlow', 'Strava for AI Agents', 'observability', 'React Flow', 'DAG visualizer', 'OpenTelemetry', '@pf.trace'];
   }
